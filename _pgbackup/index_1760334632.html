@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="it" class="dark">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Beamlight - Marketing Dashboard</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/customParseFormat.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/quarterOfYear.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css"/>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .card { background-color: #1F2937; border: 1px solid #374151; border-radius: 1rem; }
+        .kpi-card { background-color: #1F2937; border: 1px solid #374151; border-radius: 1rem; }
+        .chart-container { position: relative; height: 350px; width: 100%; }
+        .fade-in { animation: fadeIn 0.8s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .loader { width: 48px; height: 48px; border: 5px solid #FFF; border-bottom-color: #38bdf8; border-radius: 50%; display: inline-block; box-sizing: border-box; animation: rotation 1s linear infinite; }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #settings-modal { transition: opacity 0.3s ease; }
+        .input-error { border-color: #F87171 !important; box-shadow: 0 0 0 1px #F87171 !important; }
+        .table-scrollbar::-webkit-scrollbar { height: 8px; }
+        .table-scrollbar::-webkit-scrollbar-track { background: #374151; border-radius: 10px; }
+        .table-scrollbar::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 10px; }
+        .table-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+        .quarter-btn { background-color: #374151; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; transition: background-color 0.2s; }
+        .quarter-btn:hover { background-color: #4b5563; }
+        .litepicker { background-color: #374151 !important; border-color: #4b5563 !important; }
+        .litepicker .container__months .month-item-header, .litepicker .container__months .month-item { color: #d1d5db; }
+        .litepicker .container__months .month-item:hover { background-color: #4b5563 !important; }
+        .litepicker .container__months .day-item.is-start-date, .litepicker .container__months .day-item.is-end-date { background-color: #0891b2 !important; }
+        .litepicker .container__months .day-item.in-range { background-color: rgba(14, 165, 233, 0.2) !important; }
+    </style>
+    </head>
+    <body class="text-gray-200 p-4 sm:p-6 lg:p-8">
+        <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+            <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4">
+                <h3 class="text-lg font-medium leading-6 text-white">Configurazione</h3>
+                <div class="mt-4 space-y-4">
+                    <div>
+                        <label for="google-client-id" class="block text-sm font-medium text-gray-300">Google Client ID</label>
+                        <input type="text" id="google-client-id" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-cyan-500 focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label for="worker-url" class="block text-sm font-medium text-gray-300">Cloudflare Worker URL</label>
+                        <input type="text" id="worker-url" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-cyan-500 focus:border-cyan-500">
+                    </div>
+                </div>
+                <hr class="border-gray-700 my-6"/>
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-white">Configurazione Clienti</h3>
+                    <button id="add-client-btn" class="px-3 py-1 text-sm font-medium text-cyan-300 bg-cyan-800/50 hover:bg-cyan-800 rounded-md">+ Aggiungi Cliente</button>
+                </div>
+                <div class="grid grid-cols-4 gap-2 items-center text-xs text-gray-400 px-2 mt-4"><span>Nome Cliente</span><span>ID Proprietà GA4</span><span>ID Cliente Google Ads</span><span>ID Account Meta Ads</span>
+                </div>
+                <div id="client-list-container" class="mt-2 space-y-3 max-h-60 overflow-y-auto pr-2"></div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button id="close-modal-btn" class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-600 hover:bg-gray-500 rounded-md">Annulla</button>
+                    <button id="save-settings-btn" class="px-4 py-2 text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 rounded-md">Salva Tutto</button>
+                </div>
+            </div>
+        </div>
+        <div class="container mx-auto max-w-7xl">
+            <header class="flex flex-col xl:flex-row justify-between items-center mb-8 fade-in">
+                <div class="mb-4 xl:mb-0 text-center xl:text-left">
+                    <h1 class="text-3xl font-bold text-white"><span class="text-cyan-400">Beamlight</span> Marketing Dashboard</h1>
+                    <p class="text-gray-400 mt-1">Analytics e Performance ADS dei tuoi clienti.</p>
+                </div>
+                <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <input id="date-picker" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-60 p-2.5 cursor-pointer text-center">
+                        <div class="flex items-center space-x-1">
+                            <button data-quarter="1" class="quarter-btn">Q1</button>
+                            <button data-quarter="2" class="quarter-btn">Q2</button>
+                            <button data-quarter="3" class="quarter-btn">Q3</button>
+                            <button data-quarter="4" class="quarter-btn">Q4</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div id="auth-container"></div>
+                        <select id="client-selector" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5"></select>
+                        <button id="open-modal-btn" class="p-2 bg-gray-700 rounded-lg hover:bg-gray-600" title="Impostazioni">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </header>
+            <div id="message-box" class="hidden p-4 mb-4 text-sm rounded-lg" role="alert"></div>
+            <div id="loader-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+                <div class="loader"></div>
+            </div>
+            <section id="kpi-section" class="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-8"></section>
+            <main class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card fade-in lg:col-span-2 hidden" id="ga4-chart-card">
+                    <div class="p-6">
+                        <h2 class="text-xl font-semibold text-white">Traffico GA4: Sessioni vs Nuovi Utenti</h2>
+                    </div>
+                    <div class="px-6 pb-6">
+                        <div class="chart-container">
+                            <canvas id="ga4Chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="card fade-in hidden" id="gads-card-container">
+                    <div class="p-6">
+                        <h2 class="text-xl font-semibold text-white">Performance Campagne Google Ads</h2>
+                    </div>
+                    <div class="px-2 pb-6">
+                        <div id="gads-table-container" class="overflow-x-auto table-scrollbar"></div>
+                    </div>
+                </div>
+                <div class="card fade-in hidden" id="meta-card-container">
+                    <div class="p-6">
+                        <h2 class="text-xl font-semibold text-white">Performance Campagne Meta Ads</h2>
+                    </div>
+                    <div class="px-2 pb-6">
+                        <div id="meta-table-container" class="overflow-x-auto table-scrollbar"></div>
+                    </div>
+                </div>
+                <div class="card fade-in hidden" id="ga4-traffic-card">
+                    <div class="p-6">
+                        <h2 class="text-xl font-semibold text-white">GA4: Sorgenti di Traffico</h2>
+                    </div>
+                    <div class="px-2 pb-6">
+                        <div id="traffic-table-container" class="overflow-x-auto table-scrollbar"></div>
+                    </div>
+                </div>
+                <div class="card fade-in hidden" id="ga4-geo-card">
+                    <div class="p-6">
+                        <h2 class="text-xl font-semibold text-white">GA4: Utenti per Paese</h2>
+                    </div>
+                    <div class="px-2 pb-6">
+                        <div id="geo-table-container" class="overflow-x-auto table-scrollbar"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+        <script type="module">
+// --- SETUP ---
+dayjs.extend(dayjs_plugin_customParseFormat);
+dayjs.extend(dayjs_plugin_quarterOfYear);
+const clientSelector = document.getElementById('client-selector');
+const loader = document.getElementById('loader-overlay');
+const modal = document.getElementById('settings-modal');
+const clientIdInput = document.getElementById('google-client-id');
+const workerUrlInput = document.getElementById('worker-url');
+const clientListContainer = document.getElementById('client-list-container');
+let charts = {};
+let googleAuthToken = null;
+let appConfig = {};
+let dateRange = {
+    start: dayjs().subtract(7, 'day').format('YYYY-MM-DD'),
+    end: dayjs().format('YYYY-MM-DD'),
+};
+let datePicker;
+
+
+// --- FUNZIONI HELPER ---
+function showMessage(text, type = 'warning') {
+    const box = document.getElementById('message-box');
+    const colors = {
+        warning: 'text-yellow-300 bg-yellow-900/50',
+        error: 'text-red-300 bg-red-900/50',
+        success: 'text-green-300 bg-green-900/50',
+    };
+    box.textContent = text;
+    box.className = `p-4 mb-4 text-sm rounded-lg ${colors[type]}`;
+    box.classList.remove('hidden');
+}
+
+function formatCurrency(value) {
+    return `€${(value || 0).toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+}
+
+function formatNumber(value) {
+    return (value || 0).toLocaleString('it-IT');
+}
+
+// --- GESTIONE CONFIGURAZIONE (IBRIDA: LOCALE + REMOTA) ---
+function loadInitialConfig() {
+    try {
+        const localConfig = localStorage.getItem('beamlightDashboardBootstrap');
+        const parsed = localConfig ? JSON.parse(localConfig) : {};
+        appConfig.googleClientId = parsed.googleClientId || "";
+        appConfig.workerUrl = parsed.workerUrl || "";
+    } catch (e) {
+        appConfig.googleClientId = "";
+        appConfig.workerUrl = "";
+    }
+    appConfig.clients = { 'cliente_default': { name: 'Nessun cliente', ga4PropertyId: '' } };
+}
+
+async function loadRemoteConfig() {
+    if (!googleAuthToken || !appConfig.workerUrl) return;
+    loader.classList.remove('hidden');
+    try {
+        const response = await fetch(`${appConfig.workerUrl}/config`, {
+            headers: { 'Authorization': `Bearer ${googleAuthToken}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch remote config');
+        
+        const remoteConfig = await response.json();
+        appConfig = { ...appConfig, ...remoteConfig };
+
+        if (!appConfig.clients || Object.keys(appConfig.clients).length === 0) {
+            appConfig.clients = { 'cliente1': { name: 'Cliente A (Esempio)', ga4PropertyId: '' } };
+        }
+        
+        populateClientSelector();
+        updateDashboard();
+    } catch (e) {
+        showMessage("Impossibile caricare la configurazione dei clienti. Prova a salvare le impostazioni.", "error");
+    } finally {
+        loader.classList.add('hidden');
+    }
+}
+
+async function saveConfig() {
+    const configToSave = {
+        googleClientId: clientIdInput.value.trim(),
+        workerUrl: workerUrlInput.value.trim(),
+        clients: {}
+    };
+
+    let hasError = false;
+    if (!configToSave.googleClientId) { showMessage('Il campo Google Client ID non può essere vuoto.', 'error'); clientIdInput.classList.add('input-error'); hasError = true; }
+    if (!configToSave.workerUrl) { showMessage('Il campo Cloudflare Worker URL non può essere vuoto.', 'error'); workerUrlInput.classList.add('input-error'); hasError = true; }
+    if (hasError) return;
+
+    localStorage.setItem('beamlightDashboardBootstrap', JSON.stringify({
+        googleClientId: configToSave.googleClientId,
+        workerUrl: configToSave.workerUrl
+    }));
+    
+    appConfig.googleClientId = configToSave.googleClientId;
+    appConfig.workerUrl = configToSave.workerUrl;
+
+    if (!googleAuthToken) {
+        showMessage("Configurazione di base salvata. Ora puoi collegare il tuo account Google.", "warning");
+        modal.classList.add('hidden');
+        return;
+    }
+
+    clientListContainer.querySelectorAll('.client-row').forEach(row => {
+        const id = row.dataset.clientId;
+        const name = row.querySelector('.client-name-input').value.trim();
+        const ga4Id = row.querySelector('.client-ga4-input').value.trim();
+        const gAdsId = row.querySelector('.client-gads-input').value.trim();
+        const metaId = row.querySelector('.client-meta-input').value.trim();
+        if (name) {
+            configToSave.clients[id] = { name, ga4PropertyId: ga4Id, gAdsCustomerId: gAdsId, metaAdAccountId: metaId };
+        }
+    });
+
+    try {
+        loader.classList.remove('hidden');
+        const response = await fetch(`${configToSave.workerUrl}/config`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${googleAuthToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(configToSave)
+        });
+        if (!response.ok) throw new Error('Salvataggio su DB fallito');
+        
+        appConfig = configToSave;
+        modal.classList.add('hidden');
+        showMessage('Configurazione salvata con successo.', 'success');
+        populateClientSelector();
+        updateDashboard();
+    } catch (e) {
+        showMessage(`Errore nel salvataggio remoto: ${e.message}`, "error");
+    } finally {
+        loader.classList.add('hidden');
+    }
+}
+
+function populateClientSelector() {
+    const currentVal = clientSelector.value;
+    clientSelector.innerHTML = '';
+    if (appConfig && appConfig.clients) {
+        Object.entries(appConfig.clients).forEach(([id, { name }]) => {
+            clientSelector.add(new Option(name, id));
+        });
+    }
+    if (currentVal) clientSelector.value = currentVal;
+}
+
+function populateClientSettingsList() {
+    clientListContainer.innerHTML = '';
+    if (!appConfig || !appConfig.clients) return;
+    Object.entries(appConfig.clients).forEach(([id, { name, ga4PropertyId, gAdsCustomerId, metaAdAccountId }]) => {
+        const clientRow = document.createElement('div');
+        clientRow.className = 'client-row grid grid-cols-4 gap-2 items-center';
+        clientRow.dataset.clientId = id;
+        clientRow.innerHTML = `
+            <input type="text" value="${name}" class="client-name-input bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white" placeholder="Nome Cliente">
+            <input type="text" value="${ga4PropertyId || ''}" class="client-ga4-input bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white" placeholder="ID Proprietà GA4">
+            <input type="text" value="${gAdsCustomerId || ''}" class="client-gads-input bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white" placeholder="ID Cliente Google Ads">
+            <input type="text" value="${metaAdAccountId || ''}" class="client-meta-input bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white" placeholder="ID Account Meta Ads">
+        `;
+        clientListContainer.appendChild(clientRow);
+    });
+}
+
+function addNewClient() {
+    const clientId = `cliente_${Date.now()}`;
+    const clientRow = document.createElement('div');
+    clientRow.className = 'client-row grid grid-cols-4 gap-2 items-center';
+    clientRow.dataset.clientId = clientId;
+    clientRow.innerHTML = `
+        <input type="text" value="" class="client-name-input bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white" placeholder="Nuovo Cliente">
+        <input type="text" value="" class="client-ga4-input bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white" placeholder="ID Proprietà GA4">
+        <input type="text" value="" class="client-gads-input bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white" placeholder="ID Cliente Google Ads">
+        <input type="text" value="" class="client-meta-input bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white" placeholder="ID Account Meta Ads">
+    `;
+    clientListContainer.appendChild(clientRow);
+    clientRow.querySelector('.client-name-input').focus();
+}
+
+// --- LOGICA DI AUTENTICAZIONE ---
+function handleGoogleAuth() {
+    let workerUrl = appConfig.workerUrl;
+    let clientId = appConfig.googleClientId;
+    if (!clientId || !workerUrl) {
+        showMessage('Per favore, compila Client ID e Worker URL nelle impostazioni (⚙️).', 'error');
+        modal.classList.remove('hidden');
+        return;
+    }
+    const scopes = 'openid https://www.googleapis.com/auth/analytics.readonly https://www.googleapis.com/auth/adwords';
+    const redirectUri = `${workerUrl}/google-auth-callback`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}&access_type=offline&prompt=consent`;
+    window.location.href = authUrl;
+}
+
+function updateUIonAuthSuccess() {
+    document.getElementById('auth-container').innerHTML = `<div class="flex items-center p-2 rounded-md bg-green-900/70 text-green-300 text-sm"><svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>Connesso</div>`;
+}
+
+function updateUIonAuthFailure() {
+    document.getElementById('auth-container').innerHTML = `<button id="google-auth-button" class="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">Collega Google</button>`;
+    const authButton = document.getElementById('google-auth-button');
+    if(authButton) authButton.addEventListener('click', handleGoogleAuth);
+}
+
+// --- LOGICA DI AGGIORNAMENTO DATI ---
+async function updateDashboard() {
+    loader.classList.remove('hidden');
+    if (!appConfig.clients) { renderMockData(); loader.classList.add('hidden'); return; }
+    const selectedClientId = clientSelector.value;
+    const clientData = appConfig.clients[selectedClientId];
+
+    if (!clientData) {
+        showMessage("Cliente non trovato. Seleziona un cliente valido.", "error");
+        renderMockData();
+        loader.classList.add('hidden');
+        return;
+    }
+    
+    toggleUIVisibility(clientData);
+
+    if (!googleAuthToken) {
+        renderMockData();
+        loader.classList.add('hidden');
+        return;
+    }
+
+    const hasAnyId = clientData.ga4PropertyId || clientData.gAdsCustomerId || clientData.metaAdAccountId;
+    if (!hasAnyId) {
+        showMessage(`Nessun ID configurato per "${clientData.name}". Apri le impostazioni (⚙️) per aggiungere gli ID.`, 'warning');
+        renderMockData();
+        loader.classList.add('hidden');
+        return;
+    }
+
+    try {
+        document.getElementById('message-box').classList.add('hidden');
+        
+        const promises = [];
+        const dateParams = `&startDate=${dateRange.start}&endDate=${dateRange.end}`;
+
+        if (clientData.ga4PropertyId) {
+            promises.push(fetch(`${appConfig.workerUrl}/ga4?propertyId=${clientData.ga4PropertyId}${dateParams}`, { headers: { 'Authorization': `Bearer ${googleAuthToken}` } }));
+        } else {
+            promises.push(Promise.resolve(null));
+        }
+
+        if (clientData.gAdsCustomerId) {
+            promises.push(fetch(`${appConfig.workerUrl}/google-ads?customerId=${clientData.gAdsCustomerId}${dateParams}`, { headers: { 'Authorization': `Bearer ${googleAuthToken}` } }));
+        } else {
+            promises.push(Promise.resolve(null));
+        }
+        
+        if (clientData.metaAdAccountId) {
+            promises.push(fetch(`${appConfig.workerUrl}/meta-ads?adAccountId=${clientData.metaAdAccountId}${dateParams}`));
+        } else {
+            promises.push(Promise.resolve(null));
+        }
+
+        const responses = await Promise.all(promises);
+        const [ga4Response, gAdsResponse, metaResponse] = responses;
+
+        let ga4Data = {};
+        if (ga4Response) {
+             if (!ga4Response.ok) throw new Error((await ga4Response.json()).error || 'Errore GA4');
+             ga4Data = await ga4Response.json();
+        }
+        
+        let gAdsData = {};
+        let isGAdsSandbox = false;
+        let gAdsSandboxReason = '';
+        if (gAdsResponse) {
+             if (!gAdsResponse.ok) {
+                let errorMsg = 'Errore sconosciuto da Google Ads';
+                try { errorMsg = (await gAdsResponse.json()).error || 'Errore Google Ads'; }
+                catch (e) { errorMsg = `Il server ha restituito un errore non-JSON (status: ${gAdsResponse.status}).`; }
+                throw new Error(errorMsg);
+             }
+             gAdsData = await gAdsResponse.json();
+             if (gAdsData.sandbox) {
+                isGAdsSandbox = true;
+                gAdsSandboxReason = gAdsData.sandbox_reason || '';
+             }
+        }
+
+        let metaData = {};
+        let isMetaSandbox = false;
+        let metaSandboxReason = '';
+        if (metaResponse) {
+             if (!metaResponse.ok) throw new Error((await metaResponse.json()).error || 'Errore Meta Ads');
+             metaData = await metaResponse.json();
+             if (metaData.sandbox) {
+                isMetaSandbox = true;
+                metaSandboxReason = metaData.sandbox_reason || '';
+             }
+        }
+
+        const processedGA4 = processGA4Data(ga4Data);
+        const processedGAds = processGAdsData(gAdsData);
+        const processedMeta = processMetaData(metaData);
+
+        renderKPIs(processedGA4, processedGAds, processedMeta);
+        renderTrafficTable(processedGA4.traffic);
+        renderGeoTable(processedGA4.geo);
+        renderGAdsTable(processedGAds.campaigns, isGAdsSandbox);
+        renderMetaTable(processedMeta.campaigns, isMetaSandbox);
+        renderCharts(processedGA4.timeseries);
+        
+        if (isGAdsSandbox || isMetaSandbox) {
+            const gAdsMessage = isGAdsSandbox ? `Google Ads (Motivo: ${gAdsSandboxReason})` : null;
+            const metaMessage = isMetaSandbox ? `Meta Ads (Motivo: ${metaSandboxReason})` : null;
+            const sandboxPlatforms = [gAdsMessage, metaMessage].filter(Boolean).join(' e ');
+            showMessage(`ATTENZIONE: I dati di ${sandboxPlatforms} sono simulati (modalità Sandbox).`, "warning");
+        }
+
+    } catch (error) {
+        showMessage(`Errore durante il caricamento dei dati: ${error.message}.`, 'error');
+        renderMockData();
+    } finally {
+        loader.classList.add('hidden');
+    }
+}
+
+
+function renderMockData() {
+    toggleUIVisibility();
+    renderKPIs({}, {}, {});
+    renderTrafficTable([]);
+    renderGeoTable([]);
+    renderGAdsTable([], true);
+    renderMetaTable([], true);
+    renderCharts({ labels: [], sessions: [], newUsers: [] });
+}
+
+// --- FUNZIONI DI ELABORAZIONE ---
+function processGA4Data(data) {
+    const safeParse = (val) => parseInt(val || '0', 10);
+    const totals = {
+        sessions: safeParse(data.totals?.rows?.[0].metricValues[0].value),
+        newUsers: safeParse(data.totals?.rows?.[0].metricValues[1].value),
+        engagedSessions: safeParse(data.totals?.rows?.[0].metricValues[2].value),
+        conversions: safeParse(data.totals?.rows?.[0].metricValues[3].value),
+    };
+    totals.engagementRate = totals.sessions > 0 ? (totals.engagedSessions / totals.sessions) : 0;
+    
+    const timeseries = {
+        labels: data.timeseries?.rows?.slice().reverse().map(r => dayjs(r.dimensionValues[0].value, 'YYYYMMDD').format('DD/MM')) || [],
+        sessions: data.timeseries?.rows?.slice().reverse().map(r => safeParse(r.metricValues[0].value)) || [],
+        newUsers: data.timeseries?.rows?.slice().reverse().map(r => safeParse(r.metricValues[1].value)) || [],
+    };
+    const traffic = data.traffic?.rows?.map(r => ({
+        source: r.dimensionValues[0].value,
+        sessions: safeParse(r.metricValues[0].value),
+        users: safeParse(r.metricValues[1].value),
+        conversions: safeParse(r.metricValues[2].value),
+    })) || [];
+    const geo = data.geo?.rows?.map(r => ({
+        country: r.dimensionValues[0].value,
+        users: safeParse(r.metricValues[0].value),
+    })) || [];
+    
+    return { totals, timeseries, traffic, geo };
+}
+
+function processGAdsData(data) {
+    const totals = data.totals?.metrics ? {
+        cost: (data.totals.metrics.costMicros || 0) / 1000000,
+        clicks: parseInt(data.totals.metrics.clicks || 0),
+        impressions: parseInt(data.totals.metrics.impressions || 0),
+        ctr: parseFloat(data.totals.metrics.ctr || 0),
+        cpc: (data.totals.metrics.averageCpc || 0) / 1000000,
+        conversions: parseFloat(data.totals.metrics.conversions || 0),
+        cpa: (data.totals.metrics.costPerConversion || 0),
+    } : {};
+
+    const campaigns = (data.campaigns || []).map(c => ({
+        name: c.campaign.name,
+        clicks: parseInt(c.metrics.clicks || 0),
+        impressions: parseInt(c.metrics.impressions || 0),
+        cost: (c.metrics.costMicros || 0) / 1000000,
+        conversions: parseFloat(c.metrics.conversions || 0),
+        cpa: (c.metrics.costPerConversion || 0),
+    }));
+    
+    return { totals, campaigns };
+}
+
+function processMetaData(data) {
+    return {
+        totals: data.totals || { spend: 0, impressions: 0, reach: 0, clicks: 0 },
+        campaigns: data.campaigns || [],
+    };
+}
+
+
+// --- FUNZIONI DI VISUALIZZAZIONE ---
+function toggleUIVisibility(clientData = {}) {
+    document.getElementById('ga4-chart-card').classList.toggle('hidden', !clientData.ga4PropertyId);
+    document.getElementById('ga4-traffic-card').classList.toggle('hidden', !clientData.ga4PropertyId);
+    document.getElementById('ga4-geo-card').classList.toggle('hidden', !clientData.ga4PropertyId);
+    document.getElementById('gads-card-container').classList.toggle('hidden', !clientData.gAdsCustomerId);
+    document.getElementById('meta-card-container').classList.toggle('hidden', !clientData.metaAdAccountId);
+}
+
+function renderKPIs(ga4, gads, meta) {
+    const totalCost = (gads.totals?.cost || 0) + (meta.totals?.spend || 0);
+    const totalClicks = (gads.totals?.clicks || 0) + (meta.totals?.clicks || 0);
+    const totalImpressions = (gads.totals?.impressions || 0) + (meta.totals?.impressions || 0);
+    const totalConversions = (ga4.totals?.conversions || 0) + (gads.totals?.conversions || 0);
+    const blendedCPA = totalConversions > 0 ? totalCost / totalConversions : 0;
+
+    const kpiSection = document.getElementById('kpi-section');
+    kpiSection.innerHTML = `
+        <div class="kpi-card p-4 fade-in"><p class="text-sm text-gray-400">Spesa Totale</p><p class="text-2xl font-bold text-white">${formatCurrency(totalCost)}</p></div>
+        <div class="kpi-card p-4 fade-in"><p class="text-sm text-gray-400">CPA Globale</p><p class="text-2xl font-bold text-white">${formatCurrency(blendedCPA)}</p></div>
+        <div class="kpi-card p-4 fade-in"><p class="text-sm text-gray-400">Click Totali</p><p class="text-2xl font-bold text-white">${formatNumber(totalClicks)}</p></div>
+        <div class="kpi-card p-4 fade-in"><p class="text-sm text-gray-400">Impressioni Totali</p><p class="text-2xl font-bold text-white">${formatNumber(totalImpressions)}</p></div>
+        <div class="kpi-card p-4 fade-in"><p class="text-sm text-gray-400">Tasso Coinvolgimento</p><p class="text-2xl font-bold text-white">${((ga4.totals?.engagementRate || 0) * 100).toFixed(2)}%</p></div>
+    `;
+}
+
+function createTable(containerId, headers, data) {
+    const container = document.getElementById(containerId);
+    if (!data || data.length === 0) {
+        container.innerHTML = `<p class="text-center text-gray-500 py-8">Nessun dato disponibile.</p>`;
+        return;
+    }
+    const table = document.createElement('table');
+    table.className = "w-full text-sm text-left text-gray-400";
+    table.innerHTML = `
+        <thead class="text-xs text-gray-300 uppercase bg-gray-700">
+            <tr>${headers.map(h => `<th scope="col" class="px-6 py-3">${h}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+            ${data.map(row => `
+                <tr class="bg-gray-800 border-b border-gray-700 hover:bg-gray-600">
+                    ${row.map((cell, i) => i === 0 ? `<td class="px-6 py-4 font-medium text-white whitespace-nowrap">${cell}</td>` : `<td class="px-6 py-4">${cell}</td>`).join('')}
+                </tr>
+            `).join('')}
+        </tbody>
+    `;
+    container.innerHTML = '';
+    container.appendChild(table);
+}
+
+function renderTrafficTable(data) {
+    const headers = ["Fonte / Mezzo", "Sessioni", "Utenti", "Conversioni"];
+    const rows = data.map(d => [d.source, formatNumber(d.sessions), formatNumber(d.users), formatNumber(d.conversions)]);
+    createTable('traffic-table-container', headers, rows);
+}
+
+function renderGeoTable(data) {
+    const headers = ["Paese", "Utenti"];
+    const rows = data.map(d => [d.country, formatNumber(d.users)]);
+    createTable('geo-table-container', headers, rows);
+}
+
+function renderGAdsTable(data, sandbox) {
+    const title = document.querySelector('#gads-card-container h2');
+    title.innerHTML = `Performance Campagne Google Ads ${sandbox ? '<span class="text-xs text-yellow-400 font-medium ml-2 py-0.5 px-1.5 rounded-md bg-yellow-900/50">SANDBOX</span>' : ''}`;
+    const headers = ["Campagna", "Click", "Impressioni", "Costo", "Conversioni", "CPA"];
+    const rows = data.map(d => [d.name, formatNumber(d.clicks), formatNumber(d.impressions), formatCurrency(d.cost), formatNumber(d.conversions), formatCurrency(d.cpa)]);
+    createTable('gads-table-container', headers, rows);
+}
+
+function renderMetaTable(data, sandbox) {
+    const title = document.querySelector('#meta-card-container h2');
+    title.innerHTML = `Performance Campagne Meta Ads ${sandbox ? '<span class="text-xs text-yellow-400 font-medium ml-2 py-0.5 px-1.5 rounded-md bg-yellow-900/50">SANDBOX</span>' : ''}`;
+    const headers = ["Campagna", "Spesa", "Impressioni", "Click", "CTR", "CPC"];
+    const rows = data.map(d => [d.name, formatCurrency(d.spend), formatNumber(d.impressions), formatNumber(d.clicks), `${(d.ctr || 0).toFixed(2)}%`, formatCurrency(d.cpc)]);
+    createTable('meta-table-container', headers, rows);
+}
+
+function renderCharts(ga4Timeseries) {
+    // Grafico GA4
+    const ga4Ctx = document.getElementById('ga4Chart').getContext('2d');
+    if (charts.ga4) charts.ga4.destroy();
+    charts.ga4 = new Chart(ga4Ctx, {
+        type: 'line',
+        data: {
+            labels: ga4Timeseries.labels,
+            datasets: [
+                { label: 'Sessioni', data: ga4Timeseries.sessions, borderColor: 'rgb(34, 211, 238)', backgroundColor: 'rgba(34, 211, 238, 0.2)', tension: 0.4, fill: true, yAxisID: 'y' },
+                { label: 'Nuovi Utenti', data: ga4Timeseries.newUsers, borderColor: 'rgb(16, 185, 129)', backgroundColor: 'rgba(16, 185, 129, 0.2)', tension: 0.4, fill: true, yAxisID: 'y' }
+            ]
+        },
+        options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#9CA3AF' } }, x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9CA3AF' } } }, plugins: { legend: { position: 'top', labels: { color: '#D1D5DB' } } } }
+    });
+}
+
+// --- INIZIALIZZAZIONE ---
+async function initialize() {
+    loadInitialConfig(); 
+    
+    datePicker = new Litepicker({
+        element: document.getElementById('date-picker'),
+        singleMode: false,
+        format: 'DD/MM/YYYY',
+        startDate: dayjs(dateRange.start).toDate(),
+        endDate: dayjs(dateRange.end).toDate(),
+        setup: (picker) => {
+            picker.on('selected', (date1, date2) => {
+                dateRange.start = dayjs(date1.dateInstance).format('YYYY-MM-DD');
+                dateRange.end = dayjs(date2.dateInstance).format('YYYY-MM-DD');
+                updateDashboard();
+            });
+        },
+    });
+
+    document.querySelectorAll('.quarter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const quarter = parseInt(btn.dataset.quarter);
+            const year = dayjs().year();
+            const startDate = dayjs().year(year).quarter(quarter).startOf('quarter');
+            const endDate = dayjs().year(year).quarter(quarter).endOf('quarter');
+            
+            dateRange.start = startDate.format('YYYY-MM-DD');
+            dateRange.end = endDate.format('YYYY-MM-DD');
+            
+            datePicker.setDateRange(startDate.toDate(), endDate.toDate());
+            updateDashboard();
+        });
+    });
+    
+    document.getElementById('open-modal-btn').addEventListener('click', () => { 
+        clientIdInput.value = appConfig.googleClientId || ''; 
+        workerUrlInput.value = appConfig.workerUrl || ''; 
+        populateClientSettingsList(); 
+        modal.classList.remove('hidden'); 
+    });
+    document.getElementById('close-modal-btn').addEventListener('click', () => modal.classList.add('hidden'));
+    document.getElementById('save-settings-btn').addEventListener('click', saveConfig);
+    document.getElementById('add-client-btn').addEventListener('click', addNewClient);
+    
+    clientSelector.addEventListener('change', updateDashboard);
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+
+    if (tokenFromUrl) {
+        sessionStorage.setItem('googleAuthToken', tokenFromUrl);
+        window.location.href = window.location.pathname; 
+    } else {
+        googleAuthToken = sessionStorage.getItem('googleAuthToken');
+        if (googleAuthToken) {
+            updateUIonAuthSuccess();
+            await loadRemoteConfig();
+        } else {
+            updateUIonAuthFailure();
+            renderMockData();
+            showMessage("Benvenuto! Per iniziare, collega il tuo account Google.", "warning");
+        }
+    }
+}
+
+initialize();
+</script>
+    </body>
+</html>
