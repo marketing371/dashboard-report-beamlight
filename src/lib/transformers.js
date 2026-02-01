@@ -16,6 +16,8 @@ export function processGA4Data(data) {
         conversions: safeParse(data.totals?.rows?.[0].metricValues[3].value),
     };
     totals.engagementRate = totals.sessions > 0 ? (totals.engagedSessions / totals.sessions) : 0;
+    totals.bounceRate = 1 - totals.engagementRate;
+    totals.avgSessionDuration = parseFloat(data.totals?.rows?.[0].metricValues[4]?.value || 0);
 
     // Reverse to get chronological order if needed, but Chart.js might handle it.
     // Original code reversed it.
@@ -37,7 +39,18 @@ export function processGA4Data(data) {
         users: safeParse(r.metricValues[0].value),
     })) || [];
 
-    return { totals, timeseries, traffic, geo };
+    const channels = data.channels?.rows?.map(r => ({
+        channel: r.dimensionValues[0].value,
+        sessions: safeParse(r.metricValues[0].value),
+        conversions: safeParse(r.metricValues[1].value),
+    })) || [];
+
+    const devices = data.devices?.rows?.map(r => ({
+        device: r.dimensionValues[0].value,
+        users: safeParse(r.metricValues[0].value),
+    })) || [];
+
+    return { totals, timeseries, traffic, geo, channels, devices };
 }
 
 export function processGAdsData(data) {

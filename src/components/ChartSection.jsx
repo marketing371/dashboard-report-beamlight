@@ -5,12 +5,13 @@ import {
     LinearScale,
     PointElement,
     LineElement,
+    ArcElement,
     Title,
     Tooltip,
     Legend,
     Filler
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Line, Doughnut } from 'react-chartjs-2';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 
 ChartJS.register(
@@ -18,26 +19,27 @@ ChartJS.register(
     LinearScale,
     PointElement,
     LineElement,
+    ArcElement,
     Title,
     Tooltip,
     Legend,
     Filler
 );
 
-export default function ChartSection({ data, title }) {
+export default function ChartSection({ data, title, type = 'line' }) {
     const options = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                position: 'top',
-                labels: { color: '#9CA3AF' }
+                position: type === 'doughnut' ? 'right' : 'top',
+                labels: { color: '#9CA3AF', usePointStyle: true }
             },
             title: {
                 display: false,
             },
         },
-        scales: {
+        scales: type === 'line' ? {
             y: {
                 beginAtZero: true,
                 grid: { color: 'rgba(255, 255, 255, 0.1)' },
@@ -47,7 +49,7 @@ export default function ChartSection({ data, title }) {
                 grid: { color: 'rgba(255, 255, 255, 0.05)' },
                 ticks: { color: '#9CA3AF' }
             }
-        },
+        } : {},
         interaction: {
             mode: 'index',
             intersect: false,
@@ -64,7 +66,11 @@ export default function ChartSection({ data, title }) {
             </CardHeader>
             <CardContent>
                 <div className="h-[350px] w-full">
-                    <Line options={options} data={chartData} />
+                    {type === 'line' ? (
+                        <Line options={options} data={chartData} />
+                    ) : (
+                        <Doughnut options={options} data={chartData} />
+                    )}
                 </div>
             </CardContent>
         </Card>

@@ -15,7 +15,8 @@ export async function fetchClientData(workerUrl, authToken, clientData, dateRang
     const promises = [];
 
     if (clientData.ga4PropertyId) {
-        promises.push(fetch(`${workerUrl}/ga4?propertyId=${clientData.ga4PropertyId}${dateParams}`, {
+        const ga4Params = `?propertyId=${clientData.ga4PropertyId}${dateParams}`;
+        promises.push(fetch(`${workerUrl}/ga4${ga4Params}`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         }));
     } else {

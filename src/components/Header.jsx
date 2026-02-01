@@ -13,7 +13,7 @@ export default function Header({ openSettings }) {
                     <img
                         src="https://beamlight.it/wp-content/uploads/2023/11/BEAMLIGHT-sito-web-nera.png"
                         alt="Beamlight Logo"
-                        className="h-8"
+                        className="h-10 w-auto"
                     />
                     <div className="hidden md:block w-px h-6 bg-gray-700"></div>
                     <span className="hidden md:flex items-center text-gray-400 text-sm font-medium">
